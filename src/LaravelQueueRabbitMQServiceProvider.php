@@ -46,6 +46,7 @@ class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
             $this->commands([
                 Console\ExchangeDeclareCommand::class,
                 Console\QueueBindCommand::class,
+                Console\QueueScaffoldCommand::class,
                 Console\QueueDeclareCommand::class,
                 Console\QueuePurgeCommand::class,
                 Console\ConsumeCommand::class,

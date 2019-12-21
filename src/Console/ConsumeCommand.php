@@ -5,6 +5,7 @@ namespace VladimirYuldashev\LaravelQueueRabbitMQ\Console;
 use Illuminate\Queue\Console\WorkCommand;
 use Illuminate\Support\Str;
 use VladimirYuldashev\LaravelQueueRabbitMQ\Consumer;
+use VladimirYuldashev\LaravelQueueRabbitMQ\Queue\Connectors\RabbitMQConnector;
 
 class ConsumeCommand extends WorkCommand
 {
