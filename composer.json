@@ -54,6 +54,5 @@
     "test:unit": "@php vendor/bin/phpunit",
     "fix:style": "@php vendor/bin/php-cs-fixer fix --config=.php_cs.dist --allow-risky=yes --diff --verbose"
   },
-  "minimum-stability": "dev",
   "prefer-stable": true
 }
