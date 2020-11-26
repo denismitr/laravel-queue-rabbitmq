@@ -483,7 +483,7 @@ class RabbitMQQueue extends Queue implements QueueContract
      */
     public function reject(RabbitMQJob $job, bool $requeue = false): void
     {
-        $this->channel->basic_reject($job->getRabbitMQMessage()->getDeliveryTag(), $requeue);
+        $this->channel->basic_reject($job->getRabbitMQMessage()->getDeliveryTag(), false);
     }
 
     /**
@@ -556,7 +556,7 @@ class RabbitMQQueue extends Queue implements QueueContract
     public function close(): void
     {
         if ($this->currentJob && ! $this->currentJob->isDeletedOrReleased()) {
-            $this->reject($this->currentJob, true);
+            $this->reject($this->currentJob, false);
         }
 
         try {
