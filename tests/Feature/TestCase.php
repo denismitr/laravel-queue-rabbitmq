@@ -14,7 +14,7 @@ abstract class TestCase extends BaseTestCase
     /**
      * @throws AMQPProtocolChannelException
      */
-    protected function setUp(): void
+    public function setUp(): void
     {
         parent::setUp();
 
@@ -32,7 +32,7 @@ abstract class TestCase extends BaseTestCase
             $this->connection()->purge();
         }
 
-        $this->assertSame(0, Queue::size());
+        self::assertSame(0, Queue::size());
 
         parent::tearDown();
     }
@@ -55,14 +55,13 @@ abstract class TestCase extends BaseTestCase
 
         $this->assertSame(1, Queue::size());
         $this->assertNotNull($job = Queue::pop());
-        $this->assertSame(0, $job->attempts());
+        $this->assertSame(1, $job->attempts());
         $this->assertInstanceOf(RabbitMQJob::class, $job);
         $this->assertSame($payload, $job->getRawBody());
 
         $this->assertNull($job->getJobId());
 
         $job->delete();
-
         $this->assertSame(0, Queue::size());
     }
 
@@ -74,7 +73,7 @@ abstract class TestCase extends BaseTestCase
 
         $this->assertSame(1, Queue::size());
         $this->assertNotNull($job = Queue::pop());
-        $this->assertSame(0, $job->attempts());
+        $this->assertSame(1, $job->attempts());
         $this->assertInstanceOf(RabbitMQJob::class, $job);
         $this->assertSame(TestJob::class, $job->resolveName());
         $this->assertNotNull($job->getJobId());
@@ -84,10 +83,13 @@ abstract class TestCase extends BaseTestCase
         $this->assertSame(TestJob::class, $payload['displayName']);
         $this->assertSame('Illuminate\Queue\CallQueuedHandler@call', $payload['job']);
         $this->assertNull($payload['maxTries']);
-        $this->assertNull($payload['delay']);
+        $this->assertNull($payload['backoff']);
         $this->assertNull($payload['timeout']);
-        $this->assertNull($payload['timeoutAt']);
+        $this->assertNull($payload['retryUntil']);
         $this->assertSame($job->getJobId(), $payload['id']);
+
+        $job->delete();
+        $this->assertSame(0, Queue::size());
     }
 
     public function testLaterRaw(): void
@@ -117,7 +119,6 @@ abstract class TestCase extends BaseTestCase
         $this->assertSame($data, $body['data']);
 
         $job->delete();
-
         $this->assertSame(0, Queue::size());
     }
 
@@ -145,7 +146,6 @@ abstract class TestCase extends BaseTestCase
         $this->assertNotNull($job->getJobId());
 
         $job->delete();
-
         $this->assertSame(0, Queue::size());
     }
 
@@ -173,9 +173,9 @@ abstract class TestCase extends BaseTestCase
 
         $this->assertSame(1, Queue::size());
         $this->assertNotNull($job = Queue::pop());
-        $this->assertSame(0, $job->attempts());
+        $this->assertSame(1, $job->attempts());
 
-        for ($attempt = 1; $attempt <= 3; $attempt++) {
+        for ($attempt = 2; $attempt <= 4; $attempt++) {
             $job->release();
 
             sleep(1);
@@ -186,6 +186,9 @@ abstract class TestCase extends BaseTestCase
 
             $this->assertSame($attempt, $job->attempts());
         }
+
+        $job->delete();
+        $this->assertSame(0, Queue::size());
     }
 
     public function testRelease(): void
@@ -196,9 +199,9 @@ abstract class TestCase extends BaseTestCase
 
         $this->assertSame(1, Queue::size());
         $this->assertNotNull($job = Queue::pop());
-        $this->assertSame(0, $job->attempts());
+        $this->assertSame(1, $job->attempts());
 
-        for ($attempt = 1; $attempt <= 3; $attempt++) {
+        for ($attempt = 2; $attempt <= 4; $attempt++) {
             $job->release();
 
             sleep(1);
@@ -209,6 +212,9 @@ abstract class TestCase extends BaseTestCase
 
             $this->assertSame($attempt, $job->attempts());
         }
+
+        $job->delete();
+        $this->assertSame(0, Queue::size());
     }
 
     public function testReleaseWithDelayRaw(): void
@@ -219,9 +225,9 @@ abstract class TestCase extends BaseTestCase
 
         $this->assertSame(1, Queue::size());
         $this->assertNotNull($job = Queue::pop());
-        $this->assertSame(0, $job->attempts());
+        $this->assertSame(1, $job->attempts());
 
-        for ($attempt = 1; $attempt <= 3; $attempt++) {
+        for ($attempt = 2; $attempt <= 4; $attempt++) {
             $job->release(4);
 
             sleep(1);
@@ -237,6 +243,9 @@ abstract class TestCase extends BaseTestCase
 
             $this->assertSame($attempt, $job->attempts());
         }
+
+        $job->delete();
+        $this->assertSame(0, Queue::size());
     }
 
     public function testReleaseInThePast(): void
@@ -248,7 +257,10 @@ abstract class TestCase extends BaseTestCase
 
         sleep(1);
 
-        $this->assertInstanceOf(RabbitMQJob::class, Queue::pop());
+        $this->assertInstanceOf(RabbitMQJob::class, $job = Queue::pop());
+
+        $job->delete();
+        $this->assertSame(0, Queue::size());
     }
 
     public function testReleaseAndReleaseWithDelayAttempts(): void
@@ -265,15 +277,17 @@ abstract class TestCase extends BaseTestCase
         sleep(1);
 
         $this->assertNotNull($job = Queue::pop());
-        $this->assertSame(1, $job->attempts());
+        $this->assertSame(2, $job->attempts());
 
         $job->release(3);
 
         sleep(4);
 
         $this->assertNotNull($job = Queue::pop());
+        $this->assertSame(3, $job->attempts());
 
-        $this->assertSame(2, $job->attempts());
+        $job->delete();
+        $this->assertSame(0, Queue::size());
     }
 
     public function testDelete(): void
@@ -286,6 +300,22 @@ abstract class TestCase extends BaseTestCase
 
         sleep(1);
 
+        $this->assertSame(0, Queue::size());
+        $this->assertNull(Queue::pop());
+    }
+
+    public function testFailed(): void
+    {
+        Queue::push(new TestJob());
+
+        $job = Queue::pop();
+
+        $job->fail(new \RuntimeException($job->resolveName().' has an exception.'));
+
+        sleep(1);
+
+        $this->assertSame(true, $job->hasFailed());
+        $this->assertSame(true, $job->isDeleted());
         $this->assertSame(0, Queue::size());
         $this->assertNull(Queue::pop());
     }
